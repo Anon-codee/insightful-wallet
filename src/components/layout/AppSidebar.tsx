@@ -9,8 +9,10 @@ import {
   Settings,
   Vault,
   X,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFinance } from '@/contexts/FinanceContext';
 
 const navItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
@@ -29,6 +31,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const location = useLocation();
+  const { auth, signOut } = useFinance();
 
   return (
     <>
@@ -88,8 +91,22 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-sidebar-border p-4">
-          <p className="text-xs text-sidebar-foreground/50">
+        <div className="border-t border-sidebar-border p-4 space-y-3">
+          {/* User email */}
+          {auth.email && (
+            <p className="text-xs text-sidebar-foreground/70 truncate px-1">
+              {auth.email}
+            </p>
+          )}
+          {/* Logout button */}
+          <button
+            onClick={signOut}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-red-500/10 hover:text-red-400 transition-all duration-200"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Sign Out</span>
+          </button>
+          <p className="text-xs text-sidebar-foreground/30 px-1">
             FinTrack v1.0 — Smart Finance
           </p>
         </div>

@@ -70,7 +70,7 @@ interface FinanceContextType {
   setTheme: (theme: 'light' | 'dark' | 'gradient') => void;
   resetAllData: () => Promise<void>;
   exportData: () => string;
-  importData: (json: string) => boolean;
+  importData: (json: string) => Promise<boolean>;
 }
 
 const FinanceContext = createContext<FinanceContextType | null>(null);
@@ -370,16 +370,42 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     return JSON.stringify(state, null, 2);
   }, [state]);
 
-  const importData = useCallback((json: string): boolean => {
+  const importData = useCallback(async (json: string): Promise<boolean> => {
     try {
       const parsed = JSON.parse(json);
       const merged: FinanceState = { ...defaultState, ...parsed };
+
+      if (auth.userId && merged.transactions.length > 0) {
+        const rows = merged.transactions.map(tx => ({
+          id: tx.id,
+          user_id: auth.userId!,
+          amount: tx.amount,
+          type: tx.type,
+          category: tx.category,
+          short_description: tx.shortDescription,
+          detailed_description: tx.detailedDescription,
+          payment_method: tx.paymentMethod,
+          date: tx.date,
+          neglected: tx.neglected ?? false,
+        }));
+        await supabase.from('transactions').upsert(rows, { onConflict: 'id' });
+      }
+
+      if (auth.userId && merged.budgets.length > 0) {
+        const rows = merged.budgets.map(b => ({
+          user_id: auth.userId!,
+          category: b.category,
+          limit_amount: b.limit,
+        }));
+        await supabase.from('budgets').upsert(rows, { onConflict: 'user_id,category' });
+      }
+
       setState(merged);
       return true;
     } catch {
       return false;
     }
-  }, []);
+  }, [auth.userId]);
 
   return (
     <FinanceContext.Provider value={{
