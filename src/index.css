@@ -1,0 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 45 93% 47%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 89%;
+    --input: 220 13% 89%;
+    --ring: 160 84% 39%;
+    --radius: 0.75rem;
+
+    --income: 160 84% 39%;
+    --income-foreground: 0 0% 100%;
+    --expense: 0 72% 51%;
+    --expense-foreground: 0 0% 100%;
+    --vault: 45 93% 47%;
+    --vault-foreground: 30 80% 10%;
+    --cash: 200 80% 50%;
+    --cash-foreground: 0 0% 100%;
+
+    --sidebar-background: 222 47% 8%;
+    --sidebar-foreground: 220 15% 75%;
+    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 35% 14%;
+    --sidebar-accent-foreground: 220 15% 85%;
+    --sidebar-border: 222 25% 15%;
+    --sidebar-ring: 160 84% 39%;
+
+    --gradient-income: linear-gradient(135deg, hsl(160 84% 39%), hsl(170 70% 45%));
+    --gradient-expense: linear-gradient(135deg, hsl(0 72% 51%), hsl(15 80% 55%));
+    --gradient-vault: linear-gradient(135deg, hsl(45 93% 47%), hsl(35 90% 55%));
+    --gradient-cash: linear-gradient(135deg, hsl(200 80% 50%), hsl(210 75% 55%));
+    --gradient-card: linear-gradient(135deg, hsl(222 35% 12%), hsl(222 30% 16%));
+
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 220 15% 90%;
+    --card: 222 35% 10%;
+    --card-foreground: 220 15% 90%;
+    --popover: 222 35% 10%;
+    --popover-foreground: 220 15% 90%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 30% 15%;
+    --secondary-foreground: 220 15% 85%;
+    --muted: 222 25% 18%;
+    --muted-foreground: 220 15% 55%;
+    --accent: 45 93% 47%;
+    --accent-foreground: 30 80% 10%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 20% 16%;
+    --input: 222 20% 16%;
+    --ring: 160 84% 39%;
+
+    --income: 160 84% 39%;
+    --income-foreground: 0 0% 100%;
+    --expense: 0 72% 51%;
+    --expense-foreground: 0 0% 100%;
+    --vault: 45 93% 47%;
+    --vault-foreground: 30 80% 10%;
+    --cash: 200 80% 50%;
+    --cash-foreground: 0 0% 100%;
+
+    --sidebar-background: 222 47% 5%;
+    --sidebar-foreground: 220 15% 65%;
+    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 35% 12%;
+    --sidebar-accent-foreground: 220 15% 80%;
+    --sidebar-border: 222 25% 12%;
+    --sidebar-ring: 160 84% 39%;
+  }
+
+  .theme-gradient {
+    --background: 222 47% 6%;
+    --foreground: 220 15% 90%;
+    --card: 222 35% 10%;
+    --card-foreground: 220 15% 90%;
+    --popover: 222 35% 10%;
+    --popover-foreground: 220 15% 90%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 30% 15%;
+    --secondary-foreground: 220 15% 85%;
+    --muted: 222 25% 18%;
+    --muted-foreground: 220 15% 55%;
+    --accent: 45 93% 47%;
+    --accent-foreground: 30 80% 10%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 20% 16%;
+    --input: 222 20% 16%;
+    --ring: 160 84% 39%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-xl border border-border/50;
+  }
+
+  .stat-glow-income {
+    box-shadow: 0 0 30px -5px hsl(var(--income) / 0.15);
+  }
+
+  .stat-glow-expense {
+    box-shadow: 0 0 30px -5px hsl(var(--expense) / 0.15);
+  }
+
+  .stat-glow-vault {
+    box-shadow: 0 0 30px -5px hsl(var(--vault) / 0.15);
+  }
+
+  .stat-glow-cash {
+    box-shadow: 0 0 30px -5px hsl(var(--cash) / 0.15);
+  }
+
+  .text-gradient-primary {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(170 70% 50%));
+  }
+
+  .text-gradient-vault {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--vault)), hsl(35 90% 60%));
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+}
