@@ -2,8 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Transaction, Budget, SavingsVault, CustomCategories, FinanceState, VaultTransaction } from '@/types/finance';
 import { supabase } from '@/lib/supabase';
 
-const LOCAL_KEY = 'finance-tracker-local';
-
 const defaultState: FinanceState = {
   transactions: [],
   budgets: [],
@@ -12,36 +10,6 @@ const defaultState: FinanceState = {
   customCategories: { income: [], expense: [] },
   theme: 'dark',
 };
-
-function loadLocalState(): Pick<FinanceState, 'cashBalance' | 'vault' | 'customCategories' | 'theme'> {
-  try {
-    const data = localStorage.getItem(LOCAL_KEY);
-    if (data) {
-      const parsed = JSON.parse(data);
-      return {
-        cashBalance: parsed.cashBalance ?? 0,
-        vault: parsed.vault ?? defaultState.vault,
-        customCategories: parsed.customCategories ?? defaultState.customCategories,
-        theme: parsed.theme ?? 'dark',
-      };
-    }
-  } catch {}
-  return {
-    cashBalance: 0,
-    vault: defaultState.vault,
-    customCategories: defaultState.customCategories,
-    theme: 'dark',
-  };
-}
-
-function saveLocalState(state: FinanceState) {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify({
-    cashBalance: state.cashBalance,
-    vault: state.vault,
-    customCategories: state.customCategories,
-    theme: state.theme,
-  }));
-}
 
 interface AuthState {
   userId: string | null;
@@ -76,7 +44,7 @@ interface FinanceContextType {
 const FinanceContext = createContext<FinanceContextType | null>(null);
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<FinanceState>({ ...defaultState, ...loadLocalState() });
+  const [state, setState] = useState<FinanceState>(defaultState);
   const [auth, setAuth] = useState<AuthState>({ userId: null, email: null, loading: true });
 
   // ─── Auth listener ──────────────────────────────────────────────────────
@@ -100,33 +68,38 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ─── Load cloud data when user logs in ─────────────────────────────────
+  // ─── Load all cloud data when user logs in ──────────────────────────────
   useEffect(() => {
     if (!auth.userId) {
-      setState(prev => ({ ...prev, transactions: [], budgets: [] }));
+      setState(defaultState);
       return;
     }
-    fetchCloudData(auth.userId);
+    fetchAllData(auth.userId);
   }, [auth.userId]);
 
-  async function fetchCloudData(userId: string) {
-    const [{ data: transactions }, { data: budgets }] = await Promise.all([
-      supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', userId)
-        .order('date', { ascending: false }),
-      supabase
-        .from('budgets')
-        .select('*')
-        .eq('user_id', userId),
+  async function fetchAllData(userId: string) {
+    const [
+      { data: transactions },
+      { data: budgets },
+      { data: settings }
+    ] = await Promise.all([
+      supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false }),
+      supabase.from('budgets').select('*').eq('user_id', userId),
+      supabase.from('user_settings').select('*').eq('user_id', userId).single(),
     ]);
 
-    setState(prev => ({
-      ...prev,
+    setState({
       transactions: (transactions ?? []).map(mapTransaction),
       budgets: (budgets ?? []).map(mapBudget),
-    }));
+      cashBalance: settings?.cash_balance ?? 0,
+      vault: {
+        balance: settings?.vault_balance ?? 0,
+        pin: settings?.vault_pin ?? null,
+        history: settings?.vault_history ?? [],
+      },
+      customCategories: settings?.custom_categories ?? { income: [], expense: [] },
+      theme: settings?.theme ?? 'dark',
+    });
   }
 
   function mapTransaction(row: any): Transaction {
@@ -150,10 +123,23 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     };
   }
 
-  useEffect(() => {
-    saveLocalState(state);
-  }, [state.cashBalance, state.vault, state.customCategories, state.theme]);
+  // ─── Save settings to Supabase ──────────────────────────────────────────
+  async function saveSettings(userId: string, updates: Partial<{
+    cash_balance: number;
+    vault_balance: number;
+    vault_pin: string | null;
+    vault_history: VaultTransaction[];
+    custom_categories: CustomCategories;
+    theme: string;
+  }>) {
+    await supabase.from('user_settings').upsert({
+      user_id: userId,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+  }
 
+  // ─── Theme effect ───────────────────────────────────────────────────────
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove('dark', 'theme-gradient');
@@ -161,6 +147,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     else if (state.theme === 'gradient') root.classList.add('dark', 'theme-gradient');
   }, [state.theme]);
 
+  // ─── Auth methods ───────────────────────────────────────────────────────
   const signUp = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password });
     return { error: error?.message ?? null };
@@ -173,9 +160,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setState(prev => ({ ...prev, transactions: [], budgets: [] }));
+    setState(defaultState);
   }, []);
 
+  // ─── Transaction methods ────────────────────────────────────────────────
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id'>) => {
     if (!auth.userId) return;
     const { data, error } = await supabase
@@ -250,6 +238,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     await updateTransaction({ ...tx, neglected: !tx.neglected });
   }, [auth.userId, state.transactions, updateTransaction]);
 
+  // ─── Budget methods ─────────────────────────────────────────────────────
   const addBudget = useCallback(async (budget: Budget) => {
     if (!auth.userId) return;
     const { data, error } = await supabase
@@ -265,10 +254,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     if (!error && data) {
       setState(prev => ({
         ...prev,
-        budgets: [
-          ...prev.budgets.filter(b => b.category !== budget.category),
-          mapBudget(data),
-        ],
+        budgets: [...prev.budgets.filter(b => b.category !== budget.category), mapBudget(data)],
       }));
     }
   }, [auth.userId]);
@@ -282,88 +268,99 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       .eq('category', category);
 
     if (!error) {
-      setState(prev => ({
-        ...prev,
-        budgets: prev.budgets.filter(b => b.category !== category),
-      }));
+      setState(prev => ({ ...prev, budgets: prev.budgets.filter(b => b.category !== category) }));
     }
   }, [auth.userId]);
 
+  // ─── Settings methods (all synced to Supabase) ──────────────────────────
   const updateCashBalance = useCallback((amount: number) => {
     setState(prev => ({ ...prev, cashBalance: amount }));
-  }, []);
+    if (auth.userId) saveSettings(auth.userId, { cash_balance: amount });
+  }, [auth.userId]);
 
   const depositToVault = useCallback((amount: number) => {
-    const vaultTx: VaultTransaction = {
-      id: crypto.randomUUID(),
-      amount,
-      date: new Date().toISOString(),
-      type: 'deposit',
-    };
-    setState(prev => ({
-      ...prev,
-      vault: {
+    setState(prev => {
+      const vaultTx: VaultTransaction = {
+        id: crypto.randomUUID(),
+        amount,
+        date: new Date().toISOString(),
+        type: 'deposit',
+      };
+      const newVault = {
         ...prev.vault,
         balance: prev.vault.balance + amount,
         history: [vaultTx, ...prev.vault.history],
-      },
-    }));
-  }, []);
+      };
+      if (auth.userId) saveSettings(auth.userId, {
+        vault_balance: newVault.balance,
+        vault_history: newVault.history,
+      });
+      return { ...prev, vault: newVault };
+    });
+  }, [auth.userId]);
 
   const withdrawFromVault = useCallback((amount: number) => {
-    const vaultTx: VaultTransaction = {
-      id: crypto.randomUUID(),
-      amount,
-      date: new Date().toISOString(),
-      type: 'withdraw',
-    };
-    setState(prev => ({
-      ...prev,
-      vault: {
+    setState(prev => {
+      const vaultTx: VaultTransaction = {
+        id: crypto.randomUUID(),
+        amount,
+        date: new Date().toISOString(),
+        type: 'withdraw',
+      };
+      const newVault = {
         ...prev.vault,
         balance: Math.max(0, prev.vault.balance - amount),
         history: [vaultTx, ...prev.vault.history],
-      },
-    }));
-  }, []);
+      };
+      if (auth.userId) saveSettings(auth.userId, {
+        vault_balance: newVault.balance,
+        vault_history: newVault.history,
+      });
+      return { ...prev, vault: newVault };
+    });
+  }, [auth.userId]);
 
   const setVaultPin = useCallback((pin: string | null) => {
     setState(prev => ({ ...prev, vault: { ...prev.vault, pin } }));
-  }, []);
+    if (auth.userId) saveSettings(auth.userId, { vault_pin: pin });
+  }, [auth.userId]);
 
   const addCustomCategory = useCallback((type: 'income' | 'expense', category: string) => {
-    setState(prev => ({
-      ...prev,
-      customCategories: {
+    setState(prev => {
+      const newCats = {
         ...prev.customCategories,
         [type]: [...prev.customCategories[type], category],
-      },
-    }));
-  }, []);
+      };
+      if (auth.userId) saveSettings(auth.userId, { custom_categories: newCats });
+      return { ...prev, customCategories: newCats };
+    });
+  }, [auth.userId]);
 
   const removeCustomCategory = useCallback((type: 'income' | 'expense', category: string) => {
-    setState(prev => ({
-      ...prev,
-      customCategories: {
+    setState(prev => {
+      const newCats = {
         ...prev.customCategories,
         [type]: prev.customCategories[type].filter(c => c !== category),
-      },
-    }));
-  }, []);
+      };
+      if (auth.userId) saveSettings(auth.userId, { custom_categories: newCats });
+      return { ...prev, customCategories: newCats };
+    });
+  }, [auth.userId]);
 
   const setTheme = useCallback((theme: 'light' | 'dark' | 'gradient') => {
     setState(prev => ({ ...prev, theme }));
-  }, []);
+    if (auth.userId) saveSettings(auth.userId, { theme });
+  }, [auth.userId]);
 
   const resetAllData = useCallback(async () => {
     if (auth.userId) {
       await Promise.all([
         supabase.from('transactions').delete().eq('user_id', auth.userId),
         supabase.from('budgets').delete().eq('user_id', auth.userId),
+        supabase.from('user_settings').delete().eq('user_id', auth.userId),
       ]);
     }
     setState(defaultState);
-    localStorage.removeItem(LOCAL_KEY);
   }, [auth.userId]);
 
   const exportData = useCallback(() => {
@@ -375,29 +372,40 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const parsed = JSON.parse(json);
       const merged: FinanceState = { ...defaultState, ...parsed };
 
-      if (auth.userId && merged.transactions.length > 0) {
-        const rows = merged.transactions.map(tx => ({
-          id: tx.id,
-          user_id: auth.userId!,
-          amount: tx.amount,
-          type: tx.type,
-          category: tx.category,
-          short_description: tx.shortDescription,
-          detailed_description: tx.detailedDescription,
-          payment_method: tx.paymentMethod,
-          date: tx.date,
-          neglected: tx.neglected ?? false,
-        }));
-        await supabase.from('transactions').upsert(rows, { onConflict: 'id' });
-      }
+      if (auth.userId) {
+        if (merged.transactions.length > 0) {
+          const rows = merged.transactions.map(tx => ({
+            id: tx.id,
+            user_id: auth.userId!,
+            amount: tx.amount,
+            type: tx.type,
+            category: tx.category,
+            short_description: tx.shortDescription,
+            detailed_description: tx.detailedDescription,
+            payment_method: tx.paymentMethod,
+            date: tx.date,
+            neglected: tx.neglected ?? false,
+          }));
+          await supabase.from('transactions').upsert(rows, { onConflict: 'id' });
+        }
 
-      if (auth.userId && merged.budgets.length > 0) {
-        const rows = merged.budgets.map(b => ({
-          user_id: auth.userId!,
-          category: b.category,
-          limit_amount: b.limit,
-        }));
-        await supabase.from('budgets').upsert(rows, { onConflict: 'user_id,category' });
+        if (merged.budgets.length > 0) {
+          const rows = merged.budgets.map(b => ({
+            user_id: auth.userId!,
+            category: b.category,
+            limit_amount: b.limit,
+          }));
+          await supabase.from('budgets').upsert(rows, { onConflict: 'user_id,category' });
+        }
+
+        await saveSettings(auth.userId, {
+          cash_balance: merged.cashBalance,
+          vault_balance: merged.vault.balance,
+          vault_pin: merged.vault.pin,
+          vault_history: merged.vault.history,
+          custom_categories: merged.customCategories,
+          theme: merged.theme,
+        });
       }
 
       setState(merged);
